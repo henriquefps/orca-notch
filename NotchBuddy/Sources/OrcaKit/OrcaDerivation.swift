@@ -5,8 +5,11 @@ import Foundation
 enum OrcaDerivation {
     static let attentionWindow: TimeInterval = 24 * 3600
 
-    static func key(for worktreeId: String) -> String {
-        let digest = Insecure.SHA1.hash(data: Data(worktreeId.utf8))
+    /// Local keys stay `sha1(worktreeId)`; an environment's rows mix its id in, because two servers can
+    /// hold the same worktree id.
+    static func key(for worktreeId: String, hostId: String = "local") -> String {
+        let seed = hostId == "local" ? worktreeId : "\(hostId)\u{0}\(worktreeId)"
+        let digest = Insecure.SHA1.hash(data: Data(seed.utf8))
         return digest.map { String(format: "%02x", $0) }.joined().prefix(12).description
     }
 
@@ -18,18 +21,43 @@ enum OrcaDerivation {
         let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
             .map { Int($0.timeIntervalSince1970) } ?? todayStart + 86400
 
-        let visible = raw.worktrees.filter { w in
-            guard w.isArchived != true else { return false }
-            return includeRemote || !isRemote(w)
+        /// One source of rows: this Mac (and its SSH targets), or one paired environment.
+        struct Input {
+            var hostId: String
+            var hostName: String
+            var isEnvironment: Bool
+            var worktrees: [RawWorktree]
+            var workers: [RawWorker]
         }
-        let remoteIds = Set(raw.worktrees.filter(isRemote).compactMap(\.worktreeId))
-        let workers: [RawWorker] = raw.workers.filter { w in
-            if includeRemote { return true }
+        let envs = raw.environments.filter(\.enabled)
+        // A paired server the local `worktree ps` also lists (`hostId` "runtime:<id>"): the server's own
+        // read wins, so a workspace is never counted twice.
+        let envRuntimeIds = Set(envs.map { "runtime:\($0.host.id)" })
+        var inputs = [Input(hostId: "local", hostName: OrcaHost.localName, isEnvironment: false,
+                            worktrees: raw.worktrees.filter { !envRuntimeIds.contains($0.hostId ?? "") },
+                            workers: raw.workers)]
+        for env in envs {
+            inputs.append(Input(hostId: env.host.id, hostName: env.host.name, isEnvironment: true,
+                                worktrees: env.worktrees, workers: env.workers))
+        }
+
+        var workspaces: [OrcaWorkspace] = []
+        var workspaceAlerts = 0
+        var doneToday = Set<String>()
+        var summaries: [(worker: RawWorker, summary: OrcaWorkerSummary)] = []
+        for input in inputs {
+        let visible = input.worktrees.filter { w in
+            guard w.isArchived != true else { return false }
+            return input.isEnvironment || includeRemote || !isRemote(w)
+        }
+        let remoteIds = Set(input.worktrees.filter(isRemote).compactMap(\.worktreeId))
+        let workers: [RawWorker] = input.workers.filter { w in
+            if input.isEnvironment || includeRemote { return true }
             if let h = w.projection?.host?.id, h != "local" { return false }
             if let id = w.projection?.workspace?.id, remoteIds.contains(id) { return false }
             return true
         }
-        let activityById = Dictionary(raw.worktrees.compactMap { w in
+        let activityById = Dictionary(input.worktrees.compactMap { w in
             w.worktreeId.map { ($0, lastActivity(of: w)) }
         }, uniquingKeysWith: { a, _ in a })
 
@@ -39,17 +67,17 @@ enum OrcaDerivation {
                 requiresAction: w.projection?.attention?.requiresAction == true,
                 updatedAt: workerUpdate(w, fallback: w.projection?.workspace?.id.flatMap { activityById[$0] ?? nil }))
         }
-        let summaries = workers.map { (worker: $0, summary: summary($0)) }
-        let workersByWorkspace = Dictionary(grouping: summaries) { $0.worker.projection?.workspace?.id ?? "" }
+        let hostSummaries = workers.map { (worker: $0, summary: summary($0)) }
+        summaries += hostSummaries
+        let workersByWorkspace = Dictionary(grouping: hostSummaries) { $0.worker.projection?.workspace?.id ?? "" }
+        var seen = Set<String>()
 
-        var workspaces: [OrcaWorkspace] = []
-        var workspaceAlerts = 0
-        var doneToday = Set<String>()
         for w in visible {
             let id = w.worktreeId ?? "\(w.repo ?? "")/\(w.displayName ?? "")"
+            guard seen.insert(id).inserted else { continue }   // one row per worktree and host
             var agents = (w.agents ?? []).map { a in
                 OrcaAgent(type: a.agentType, state: a.state, since: a.stateStartedAt.map(seconds), tool: a.toolName,
-                          last: OrcaFormatting.oneLine(a.lastAssistantMessage, limit: 160))
+                          last: OrcaFormatting.oneLine(a.lastAssistantMessage, limit: 160), host: input.hostName)
             }
             let ws = (workersByWorkspace[id] ?? []).map(\.summary)
             let activity = lastActivity(of: w)
@@ -82,22 +110,24 @@ enum OrcaDerivation {
 
             let finishedToday = ws.contains { ($0.outcome == "succeeded" || $0.outcome == "failed") && inDay($0.updatedAt, todayStart, tomorrowStart) }
                 || agents.contains { $0.state == "done" && inDay($0.since, todayStart, tomorrowStart) }
-            if finishedToday { doneToday.insert(id) }
+            if finishedToday { doneToday.insert("\(input.hostId)|\(id)") }
 
             workspaces.append(OrcaWorkspace(
-                key: key(for: id), repo: w.repo ?? "", name: w.displayName ?? "",
+                key: key(for: id, hostId: input.hostId), repo: w.repo ?? "", name: w.displayName ?? "",
                 branch: w.branch.map { $0.hasPrefix("refs/heads/") ? String($0.dropFirst(11)) : $0 },
                 state: state, workspaceStatus: w.workspaceStatus,
                 comment: OrcaFormatting.oneLine(w.comment, limit: 120), unread: w.unread == true, pr: pr,
                 liveTerminals: w.liveTerminalCount ?? 0, lastActivityAt: activity, isActive: isActive(w),
-                isRemote: isRemote(w), needsAttention: attention, agents: agents, workers: ws))
+                isRemote: input.isEnvironment || isRemote(w), host: input.hostName, hostId: input.hostId,
+                needsAttention: attention, agents: agents, workers: ws))
         }
         // Workers whose workspace is not in the list (removed/archived) still count as done today.
-        let known = Set(raw.worktrees.compactMap(\.worktreeId))
-        for item in summaries where (item.summary.outcome == "succeeded" || item.summary.outcome == "failed")
+        let known = Set(input.worktrees.compactMap(\.worktreeId))
+        for item in hostSummaries where (item.summary.outcome == "succeeded" || item.summary.outcome == "failed")
             && inDay(item.summary.updatedAt, todayStart, tomorrowStart) {
             let id = item.worker.projection?.workspace?.id ?? item.worker.taskId ?? ""
-            if !known.contains(id) { doneToday.insert(id) }
+            if !known.contains(id) { doneToday.insert("\(input.hostId)|\(id)") }
+        }
         }
 
         workspaces.sort {
@@ -144,7 +174,11 @@ enum OrcaDerivation {
                                   version: runtime?.appVersion),
             counts: counts, agentCounts: agentCounts, workers: workerCounts,
             usage: usage(raw.rateLimits, now: now, calendar: calendar),
-            workspaces: workspaces, sources: sources)
+            workspaces: workspaces, sources: sources,
+            hosts: raw.environments.map {
+                OrcaHostStatus(host: $0.host, enabled: $0.enabled, ok: $0.health.ok,
+                               lastSuccessAt: $0.health.lastSuccessAt, error: $0.health.error)
+            })
     }
 
     // MARK: - Rules

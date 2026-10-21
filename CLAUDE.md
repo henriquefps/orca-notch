@@ -26,7 +26,7 @@ Tests: `for t in scripts/test-*.sh; do bash "$t"; done`
 - Never block Claude Code: if the app doesn't answer, the hook exits immediately.
 - Never overwrite `~/.claude/settings.json`: dated backup, merge, show the diff, write only after the user confirms.
 - Never approve a Claude Code or Codex permission without an explicit click.
-- The notch reads Orca through read-only `orca` commands. The single exception is the row click, which runs `terminal switch --terminal <handle>` (a view change in Orca, no state touched; see docs/orca-polling.md). Do not add another non-read command.
+- The notch reads Orca through read-only `orca` commands, locally and with `--environment <id>` for the paired remote servers (`environment list`, `worktree ps`, `orchestration worker-list`; `account list` is local-only). From `environment list` keep only `id` and `name`, never endpoints, tokens, pairing codes or device ids. The single exception is the row click, which runs `terminal switch --terminal <handle>` (with `--environment <id>` for a remote row): a view change in Orca, no state touched; see docs/orca-polling.md. Do not add another non-read command.
 - Performance: 0 % CPU when the island is hidden.
 - Pill IDs are stable contract values (Keychain, UserDefaults, hook routing): never rename an existing pill ID.
 - Never restyle existing views (pills, cards, Settings, chat…) unless asked. New views follow the existing style.

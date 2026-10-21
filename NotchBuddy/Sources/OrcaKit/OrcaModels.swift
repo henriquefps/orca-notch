@@ -82,6 +82,8 @@ public struct OrcaAgent: Equatable, Sendable {
     /// `lastAssistantMessage` on one line, at most 160 characters.
     public var last: String?
     public var status: OrcaAgentStatus = .idle
+    /// Host that runs the agent: `OrcaHost.localName` or the paired environment's name.
+    public var host: String = OrcaHost.localName
     public var isWorking: Bool { state == "working" }
 }
 
@@ -93,6 +95,28 @@ public struct OrcaWorkerSummary: Equatable, Sendable {
     public var requiresAction: Bool
     /// Last known update (epoch seconds), when Orca exposes one.
     public var updatedAt: Int?
+}
+
+/// A paired remote Orca server (`orca environment list`). Only the id and the name are kept: never
+/// endpoints, tokens, pairing codes or device ids.
+public struct OrcaHost: Equatable, Sendable, Identifiable {
+    public static let localName = "Local"
+    public var id: String
+    public var name: String
+}
+
+/// Reachability of one paired environment, for the footer marker and the per-host Settings toggle.
+public struct OrcaHostStatus: Equatable, Sendable, Identifiable {
+    public var host: OrcaHost
+    /// False when the user turned the host off (or all remote hosts): it is then not polled.
+    public var enabled: Bool
+    /// The last `worktree ps` against it worked. Rows of a host that is not `ok` are its last good ones.
+    public var ok: Bool
+    public var lastSuccessAt: Int?
+    public var error: String?
+    public var id: String { host.id }
+    /// Polled and unreachable: the footer shows an offline marker.
+    public var isOffline: Bool { enabled && !ok && error != nil }
 }
 
 public struct OrcaWorkspace: Equatable, Sendable, Identifiable {
@@ -110,6 +134,10 @@ public struct OrcaWorkspace: Equatable, Sendable, Identifiable {
     public var lastActivityAt: Int?
     public var isActive: Bool
     public var isRemote: Bool
+    /// `OrcaHost.localName` or the paired environment's name.
+    public var host: String = OrcaHost.localName
+    /// `"local"` or the environment id.
+    public var hostId: String = "local"
     public var needsAttention: Bool
     public var agents: [OrcaAgent]
     public var workers: [OrcaWorkerSummary]
@@ -170,15 +198,24 @@ public struct OrcaSnapshot: Equatable, Sendable {
     /// Non-archived workspaces, by state priority then most recent activity.
     public var workspaces: [OrcaWorkspace]
     public var sources: [OrcaSource: OrcaSourceHealth]
+    /// Paired environments, in the order `environment list` gave them.
+    public var hosts: [OrcaHostStatus] = []
 
     /// Same data, ignoring bookkeeping that changes on every poll (`generatedAt`, per-source
-    /// `lastSuccessAt`). The store publishes only when this is false, so an unchanged Orca does not
-    /// re-render the island.
+    /// `lastSuccessAt`) and activity times that draw the same "N min ago" label (a terminal that prints
+    /// all the time, such as a remote desktop session, moves `lastActivityAt` on every poll). The store
+    /// publishes only when this is false, so an unchanged Orca does not re-render the island.
     public func hasSameContent(as other: OrcaSnapshot) -> Bool {
         func normalized(_ s: OrcaSnapshot) -> OrcaSnapshot {
             var n = s
             n.generatedAt = 0
             n.sources = n.sources.mapValues { var h = $0; h.lastSuccessAt = nil; return h }
+            n.hosts = n.hosts.map { var h = $0; h.lastSuccessAt = nil; return h }
+            n.workspaces = n.workspaces.map {
+                var w = $0
+                w.lastActivityAt = w.lastActivityAt.map { OrcaFormatting.agoBucket(since: $0, now: s.generatedAt) }
+                return w
+            }
             return n
         }
         return normalized(self) == normalized(other)

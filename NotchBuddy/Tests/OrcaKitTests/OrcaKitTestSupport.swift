@@ -39,3 +39,18 @@ enum TestClock {
     static let now = Date(timeIntervalSince1970: 1_792_610_700)
     static var utc: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
 }
+
+extension FakeRunner {
+    /// `standard()` plus two paired servers (CachyOS, Winboat) answering with the sanitized remote fixtures.
+    static func withEnvironments() -> FakeRunner {
+        let r = standard()
+        r.set("environment list --json", RemoteFixtures.environmentList)
+        for (id, ps) in [(RemoteFixtures.cachyId, RemoteFixtures.cachyPs), (RemoteFixtures.winboatId, RemoteFixtures.winboatPs)] {
+            r.set("worktree ps --json --environment \(id)", ps)
+            r.set("orchestration worker-list --json --environment \(id)", RemoteFixtures.emptyWorkers)
+        }
+        return r
+    }
+
+    func callCount(_ prefix: String) -> Int { calls.filter { $0.joined(separator: " ").hasPrefix(prefix) }.count }
+}

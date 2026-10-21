@@ -94,9 +94,25 @@ struct RawWorker: Decodable {
     struct Attention: Decodable { var requiresAction: Bool? }
 }
 
+/// `environment list`: only id and name are decoded, so endpoints, pairing data and device ids never
+/// enter memory as Swift values.
+struct RawEnvironmentsResult: Decodable {
+    var environments: [RawEnvironment]?
+    struct RawEnvironment: Decodable { var id: String?; var name: String? }
+}
+
 struct RawStatusResult: Decodable {
     var runtime: Runtime?
     struct Runtime: Decodable { var state: String?; var reachable: Bool?; var appVersion: String? }
+}
+
+/// Last good state of one paired environment (read with `--environment`).
+struct RawEnvironmentState: Sendable {
+    var host: OrcaHost
+    var enabled = true
+    var worktrees: [RawWorktree] = []
+    var workers: [RawWorker] = []
+    var health = OrcaSourceHealth(ok: false)
 }
 
 /// Last good value of each source (raw, already stripped to the fields above).
@@ -105,4 +121,5 @@ struct OrcaRawState: Sendable {
     var rateLimits: [String: RawRateLimit] = [:]
     var workers: [RawWorker] = []
     var status: RawStatusResult.Runtime?
+    var environments: [RawEnvironmentState] = []
 }
