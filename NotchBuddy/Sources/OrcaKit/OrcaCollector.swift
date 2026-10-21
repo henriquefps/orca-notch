@@ -8,9 +8,9 @@ public actor OrcaCollector {
     public static let commandTimeout: TimeInterval = 10
     static let maxWorkerPages = 50
 
-    private let runner: any OrcaCommandRunning
-    private let timeout: TimeInterval
-    private var raw = OrcaRawState()
+    let runner: any OrcaCommandRunning
+    let timeout: TimeInterval
+    var raw = OrcaRawState()
     private var health: [OrcaSource: OrcaSourceHealth] = Dictionary(
         uniqueKeysWithValues: OrcaSource.allCases.map { ($0, OrcaSourceHealth(ok: false)) })
     private var lastCompleteAt: Int?
@@ -46,6 +46,20 @@ public actor OrcaCollector {
         record(.workers, results.2) { raw.workers = $0 }
         record(.status, results.3) { raw.status = $0 }
         if health.values.allSatisfy(\.ok) { lastCompleteAt = at }
+        return snapshot(includeRemote: includeRemote, now: now, calendar: calendar)
+    }
+
+    /// Fast cycle: only `worktree ps` (counters and list); the other sources keep their last good value.
+    public func collectFast(includeRemote: Bool = true, now: Date = Date(), calendar: Calendar = .current) async -> OrcaSnapshot {
+        let result = await attempt { try await self.fetchWorktrees() }
+        let at = Int(now.timeIntervalSince1970)
+        switch result {
+        case .success(let value):
+            raw.worktrees = value
+            health[.worktrees] = OrcaSourceHealth(ok: true, lastSuccessAt: at)
+        case .failure(let e):
+            health[.worktrees] = OrcaSourceHealth(ok: false, lastSuccessAt: health[.worktrees]?.lastSuccessAt, error: e.summary)
+        }
         return snapshot(includeRemote: includeRemote, now: now, calendar: calendar)
     }
 

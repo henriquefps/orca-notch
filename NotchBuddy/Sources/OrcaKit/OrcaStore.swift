@@ -3,6 +3,8 @@ import Observation
 
 /// Observable view of Orca state, read straight from the `orca` CLI (no daemon).
 /// Polling is a sleeping Task: nothing runs between cycles, and `stop()` cancels it entirely.
+/// The cadence follows `OrcaPollPolicy` (fast while the island is on screen, slow otherwise); the CLI
+/// work and the derivation run in `OrcaCollector` (an actor), only the snapshot assignment is on the main actor.
 @MainActor
 @Observable
 public final class OrcaStore {
@@ -17,6 +19,8 @@ public final class OrcaStore {
     @ObservationIgnored private let collector: OrcaCollector
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var interval: TimeInterval
+    @ObservationIgnored private var tick: TimeInterval = OrcaPollPolicy.idleInterval
+    @ObservationIgnored private var lastFullAt: Date?
 
     public init(runner: any OrcaCommandRunning = ProcessCommandRunner(),
                 pollInterval: TimeInterval = OrcaCollector.defaultInterval) {
@@ -32,14 +36,25 @@ public final class OrcaStore {
         Task { await c.setPollInterval(i) }
     }
 
+    /// Time between two cycles right now (policy-driven).
+    public var tickInterval: TimeInterval { tick }
+
+    /// Tells the store what the app is doing; a faster cadence restarts the loop (immediate refresh).
+    public func setActivity(islandVisible: Bool, asleep: Bool) {
+        let next = OrcaPollPolicy.interval(islandVisible: islandVisible, asleep: asleep)
+        guard next != tick else { return }
+        tick = next
+        if task != nil { stop(); start() }
+    }
+
     public func start() {
         guard task == nil else { return }
         isPolling = true
         task = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                await self.refresh()
-                let seconds = self.interval
+                await self.cycle()
+                let seconds = self.tick
                 try? await Task.sleep(for: .seconds(seconds))
             }
         }
@@ -51,14 +66,35 @@ public final class OrcaStore {
         isPolling = false
     }
 
-    /// One immediate collection cycle.
+    /// Row click: reveal the workspace in the Orca app (see `OrcaReveal`); runs off the main actor.
+    public func reveal(workspaceKey: String) {
+        let c = collector
+        Task.detached(priority: .userInitiated) { _ = await c.reveal(workspaceKey: workspaceKey) }
+    }
+
+    /// One immediate full collection cycle (all sources).
     public func refresh() async {
+        lastFullAt = Date()
         let next = await collector.collect(includeRemote: includeRemote)
-        if next != snapshot { snapshot = next }
+        publish(next)
+    }
+
+    /// One policy tick: a fast cycle (`worktree ps` only), or a full one when it is due.
+    private func cycle() async {
+        if OrcaPollPolicy.isFullCycleDue(lastFullAt: lastFullAt) {
+            await refresh()
+        } else {
+            let next = await collector.collectFast(includeRemote: includeRemote)
+            publish(next)
+        }
+    }
+
+    private func publish(_ next: OrcaSnapshot) {
+        if !next.hasSameContent(as: snapshot) { snapshot = next }
     }
 
     private func rederive() async {
         let next = await collector.snapshot(includeRemote: includeRemote)
-        if next != snapshot { snapshot = next }
+        publish(next)
     }
 }

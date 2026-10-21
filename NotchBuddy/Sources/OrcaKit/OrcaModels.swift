@@ -44,6 +44,36 @@ public struct OrcaPullRequest: Equatable, Sendable {
     public var isOpen: Bool { state == "open" }
 }
 
+/// What an agent means to the notch: the three counters plus `idle` (stale, not counted).
+public enum OrcaAgentStatus: String, Sendable, Codable {
+    /// Working (sidebar spinner).
+    case running
+    /// Done today and nothing waits on the user (sidebar check-circle).
+    case finished
+    /// Needs the user: unread result, waiting for input/permission, or failed (sidebar bell).
+    case alert
+    /// Done on a previous day, or waiting on a workspace that went quiet over 24 h ago.
+    case idle
+}
+
+/// Agents (not workspaces) per counter.
+public struct OrcaAgentCounts: Equatable, Sendable {
+    public var running = 0
+    public var finished = 0
+    public var alert = 0
+
+    public init(running: Int = 0, finished: Int = 0, alert: Int = 0) {
+        self.running = running
+        self.finished = finished
+        self.alert = alert
+    }
+
+    public var total: Int { running + finished + alert }
+    /// The closed island stays on screen only while something runs or waits on the user;
+    /// finished agents alone are idle ("collapse as today").
+    public var keepsIslandVisible: Bool { running > 0 || alert > 0 }
+}
+
 public struct OrcaAgent: Equatable, Sendable {
     public var type: String?
     public var state: String?
@@ -51,6 +81,7 @@ public struct OrcaAgent: Equatable, Sendable {
     public var tool: String?
     /// `lastAssistantMessage` on one line, at most 160 characters.
     public var last: String?
+    public var status: OrcaAgentStatus = .idle
     public var isWorking: Bool { state == "working" }
 }
 
@@ -132,11 +163,26 @@ public struct OrcaSnapshot: Equatable, Sendable {
     public var stale: Bool
     public var orca: OrcaRuntimeInfo
     public var counts: OrcaCounts
+    /// Per-agent counters of the closed island.
+    public var agentCounts = OrcaAgentCounts()
     public var workers: OrcaWorkerCounts
     public var usage: [OrcaProviderUsage]
     /// Non-archived workspaces, by state priority then most recent activity.
     public var workspaces: [OrcaWorkspace]
     public var sources: [OrcaSource: OrcaSourceHealth]
+
+    /// Same data, ignoring bookkeeping that changes on every poll (`generatedAt`, per-source
+    /// `lastSuccessAt`). The store publishes only when this is false, so an unchanged Orca does not
+    /// re-render the island.
+    public func hasSameContent(as other: OrcaSnapshot) -> Bool {
+        func normalized(_ s: OrcaSnapshot) -> OrcaSnapshot {
+            var n = s
+            n.generatedAt = 0
+            n.sources = n.sources.mapValues { var h = $0; h.lastSuccessAt = nil; return h }
+            return n
+        }
+        return normalized(self) == normalized(other)
+    }
 
     public static let empty = OrcaSnapshot(
         generatedAt: 0, stale: true, orca: OrcaRuntimeInfo(ok: false, version: nil),

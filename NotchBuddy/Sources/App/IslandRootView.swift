@@ -72,9 +72,9 @@ struct IslandContainer: View {
 
             Group {
                 if state.mode == .compact {
-                    CompactMiniGrid(state: state)
-                        .scaleEffect(IslandRestingLayout(width: islandWidth, height: islandHeight).miniGridScale)
-                        .position(x: islandWidth - 40, y: islandHeight / 2)
+                    let resting = IslandRestingLayout(width: islandWidth, height: islandHeight)
+                    OrcaCounterStrip(counts: state.orca.agentCounts, iconSize: resting.counterIconSize)
+                        .position(x: resting.counterCenterX, y: islandHeight / 2)
                         .transition(.opacity)
                 }
             }
@@ -380,6 +380,10 @@ struct CountdownBar: View {
 
 struct IslandContentView: View {
     @ObservedObject var state: AppState
+    /// Views that have been shown at least once. The others stay unmounted: a mounted view costs a share
+    /// of every SwiftUI update (all thirteen mounted made each mascot frame cost tens of ms), but one that
+    /// was shown stays mounted so its state and the cross-fade survive.
+    @State private var mounted: Set<IslandView> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -393,10 +397,11 @@ struct IslandContentView: View {
                     let active = state.view == v
                     // Views that fill available height instead of the fixed 98pt content frame:
                     // chat (prompt) is always flexible.
-                    let isTall = v == .prompt
+                    let isTall = v == .prompt || v == .overview || v == .empty
                     let anim: Animation = active
                         ? .spring(response: 0.4, dampingFraction: 0.8).delay(0.16)
                         : .easeIn(duration: 0.16)
+                    if active || mounted.contains(v) {
                     IslandViewContent(view: v, state: state)
                         // Views behind the active one stay mounted (for the cross-fade)
                         // but stop their endless animations: nobody sees them.
@@ -408,10 +413,13 @@ struct IslandContentView: View {
                         .scaleEffect(active ? 1 : 0.97)
                         .allowsHitTesting(active)
                         .animation(anim, value: state.view)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 10)
+            .onAppear { mounted.insert(state.view) }
+            .onChange(of: state.view) { _, v in mounted.insert(v) }
         }
         .padding(.top, 8)
         .padding(.bottom, 10)
@@ -447,15 +455,8 @@ struct IslandHeader: View {
 
             Spacer()
 
-            // Right: plan pill (GitHub build, home view only) + action icons
+            // Right: action icons (the Orca list has its own usage footer, no plan pill here)
             HStack(spacing: 8) {
-                // Claude and Codex both on: only Claude here (two pills and the icons do not
-                // clear the notch); Codex is a row in the Claude plan card.
-                if state.view == .overview && state.showPlanInNotch && state.planRelayInstalled {
-                    ClaudePlanHeaderPill(state: state)
-                } else if state.view == .overview && state.showCodexPlanInNotch {
-                    ClaudePlanHeaderPill(state: state, codex: true)
-                }
                 HStack(spacing: 14) {
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

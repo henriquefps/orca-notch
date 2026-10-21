@@ -132,3 +132,19 @@ final class OrcaResolverAndStoreTests: XCTestCase {
         store.stop(); XCTAssertFalse(store.isPolling)
     }
 }
+
+final class OrcaSnapshotChangeTests: XCTestCase {
+    func testPollBookkeepingAloneIsNotAChange() async {
+        let collector = OrcaCollector(runner: FakeRunner.standard())
+        let a = await collector.collect(now: TestClock.now, calendar: TestClock.utc)
+        let b = await collector.collect(now: TestClock.now.addingTimeInterval(2.5), calendar: TestClock.utc)
+        XCTAssertNotEqual(a, b)                       // generatedAt / lastSuccessAt moved
+        XCTAssertTrue(a.hasSameContent(as: b))
+        var changed = b
+        changed.agentCounts.running += 1
+        XCTAssertFalse(a.hasSameContent(as: changed))
+        var failing = b
+        failing.sources[.worktrees] = OrcaSourceHealth(ok: false, error: "x")
+        XCTAssertFalse(a.hasSameContent(as: failing))
+    }
+}

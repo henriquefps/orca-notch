@@ -4,6 +4,17 @@
 
 Orca Notch starts from [Louis-CFM/coucou](https://github.com/Louis-CFM/coucou) at the merge of pull request #831 (`1e51809`). The history before that point lives upstream.
 
+### Added
+
+- Orca data in the island: the closed island shows three agent counters (spinner running, check-circle finished today, bell needs you), only the non-zero ones, and stays out of the way when everything is idle. The open island lists the workspaces flat, most urgent first, with state, repo, branch, PR, agents and time since activity, plus a usage footer per provider. Live data comes from `orca worktree ps` polled every 2.5 s while the island is visible and every 15 s when hidden or asleep (`docs/orca-polling.md`).
+
+### Changed
+
+- Closed island: the three counters are about twice as big (icon up to 20 pt, semibold digits) and each ear of the resting island is 148 pt wide, so nothing clips on screens with and without a notch.
+- Clicking a workspace row in the open island brings that workspace's terminal forward in Orca (`orca terminal switch`, the only non-read command the notch runs).
+- CPU with the island on screen drops from about 18 % to about 1 to 2 %: the mascot redraws at 2 to 20 fps instead of the display rate, the pointer is read from mouse events instead of a 60 Hz timer, the spinners run in Core Animation, unvisited island views are not mounted, and an unchanged Orca snapshot is not republished.
+- The home view and the compact grid no longer show Claude Code session pills or the Claude/Codex plan pill; they show the Orca view instead.
+
 ### Removed
 
 - Platforms: the Android app, the Windows and Linux (Tauri) app, the relay Worker, the iPhone app with its widgets, notification extension and phone link, the Homebrew cask, the GitHub Pages site and the README media.
