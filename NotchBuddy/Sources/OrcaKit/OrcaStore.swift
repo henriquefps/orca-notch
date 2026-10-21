@@ -16,6 +16,16 @@ public final class OrcaStore {
         didSet { if oldValue != includeRemote { Task { await rederive() } } }
     }
 
+    /// Paired remote Orca servers (`--environment`): off drops all of them from the snapshot and stops polling them.
+    public var includeEnvironments = true {
+        didSet { if oldValue != includeEnvironments { applyEnvironmentPolicy() } }
+    }
+
+    /// Environment ids the user turned off one by one.
+    public var disabledEnvironmentIds: Set<String> = [] {
+        didSet { if oldValue != disabledEnvironmentIds { applyEnvironmentPolicy() } }
+    }
+
     @ObservationIgnored private let collector: OrcaCollector
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var interval: TimeInterval
@@ -75,6 +85,7 @@ public final class OrcaStore {
     /// One immediate full collection cycle (all sources).
     public func refresh() async {
         lastFullAt = Date()
+        launchEnvironments(full: true)
         let next = await collector.collect(includeRemote: includeRemote)
         publish(next)
     }
@@ -84,8 +95,29 @@ public final class OrcaStore {
         if OrcaPollPolicy.isFullCycleDue(lastFullAt: lastFullAt) {
             await refresh()
         } else {
+            launchEnvironments(full: false)
             let next = await collector.collectFast(includeRemote: includeRemote)
             publish(next)
+        }
+    }
+
+    /// Paired servers are read in their own tasks, so a slow or offline one never delays the local cycle:
+    /// each publishes when it finishes (the collector skips a server whose read is still in flight).
+    private func launchEnvironments(full: Bool) {
+        let c = collector
+        Task { [weak self] in
+            guard let self else { return }
+            let next = await c.pollEnvironments(full: full, includeRemote: self.includeRemote)
+            self.publish(next)
+        }
+    }
+
+    private func applyEnvironmentPolicy() {
+        let c = collector, all = includeEnvironments, off = disabledEnvironmentIds
+        Task { [weak self] in
+            await c.setEnvironmentPolicy(includeAll: all, disabledIds: off)
+            await self?.rederive()
+            if all { self?.launchEnvironments(full: true) }
         }
     }
 

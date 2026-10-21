@@ -15,6 +15,18 @@ public enum OrcaFormatting {
         }
     }
 
+    /// Age of `epoch` rounded down to what `ago` shows (0, N min, N h, N d, in seconds): two activity
+    /// times with the same bucket draw the same label.
+    static func agoBucket(since epoch: Int, now: Int) -> Int {
+        let seconds = max(0, now - epoch)
+        switch seconds {
+        case ..<60: return 0
+        case ..<3600: return seconds / 60 * 60
+        case ..<86400: return seconds / 3600 * 3600
+        default: return seconds / 86400 * 86400
+        }
+    }
+
     private static let weekdays: [OrcaLanguage: [String]] = [
         .en: ["sun", "mon", "tue", "wed", "thu", "fri", "sat"],
         .pt: ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"],

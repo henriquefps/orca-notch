@@ -8,6 +8,8 @@ Orca Notch starts from [Louis-CFM/coucou](https://github.com/Louis-CFM/coucou) a
 
 - Orca data in the island: the closed island shows three agent counters (spinner running, check-circle finished today, bell needs you), only the non-zero ones, and stays out of the way when everything is idle. The open island lists the workspaces flat, most urgent first, with state, repo, branch, PR, agents and time since activity, plus a usage footer per provider. Live data comes from `orca worktree ps` polled every 2.5 s while the island is visible and every 15 s when hidden or asleep (`docs/orca-polling.md`).
 
+- Remote Orca servers: the notch discovers the servers you paired in Orca (`orca environment list`, refreshed about every minute) and reads each one with `--environment`, in parallel, with the same cadence as the local read and its own 10 s timeout. The closed-island counters sum the agents of every host; rows of a remote workspace carry the server's name as a small badge; a server that cannot be reached is marked offline in the footer while the others keep working. Settings gets "Include remote Orca servers" (on by default) and a toggle per server. Clicking a remote row brings its terminal forward on that server. Details in `docs/orca-polling.md`.
+
 ### Changed
 
 - Closed island: the three counters are about twice as big (icon up to 20 pt, semibold digits) and each ear of the resting island is 148 pt wide, so nothing clips on screens with and without a notch.

@@ -185,7 +185,7 @@ struct OrcaWorkspaceListView: View {
                         }
                     }
                 }
-                OrcaUsageFooter(usage: state.orca.usage)
+                OrcaUsageFooter(usage: state.orca.usage, offlineHosts: state.orca.hosts.filter(\.isOffline).map(\.host.name))
             }
             .padding(.leading, 108)
             .padding(.trailing, 12)
@@ -227,6 +227,15 @@ struct OrcaWorkspaceRow: View {
             }
             .layoutPriority(1)
             Spacer(minLength: 4)
+            if workspace.hostId != "local" {
+                Text(workspace.host)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(OrcaColors.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.07)))
+                    .fixedSize()
+            }
             if let pr = workspace.pr, let number = pr.number {
                 Text("PR #\(number)")
                     .font(.system(size: 9, weight: .medium))
@@ -265,13 +274,23 @@ struct OrcaWorkspaceRow: View {
 
 struct OrcaUsageFooter: View {
     let usage: [OrcaProviderUsage]
+    /// Names of the paired servers that could not be reached; their rows are the last good ones.
+    var offlineHosts: [String] = []
 
     var body: some View {
-        if !usage.isEmpty {
+        if !usage.isEmpty || !offlineHosts.isEmpty {
             VStack(spacing: 4) {
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
+                        ForEach(offlineHosts, id: \.self) { name in
+                            HStack(spacing: 4) {
+                                Image(systemName: "wifi.slash").font(.system(size: 9, weight: .semibold))
+                                Text("\(name) offline").font(.system(size: 10, weight: .medium))
+                            }
+                            .foregroundColor(OrcaColors.alert)
+                            .fixedSize()
+                        }
                         ForEach(usage) { provider in
                             HStack(spacing: 5) {
                                 Text(provider.label)

@@ -26,6 +26,8 @@ struct SettingsView: View {
     private var displayModels: [(id: String, label: String)] {
         fetchedModels.isEmpty ? Self.fallbackModels : fetchedModels
     }
+    @AppStorage(OrcaHostSettings.includeKey) private var orcaIncludeRemoteHosts = true
+    @AppStorage(OrcaHostSettings.disabledKey) private var orcaDisabledHostIds = ""
     @State private var launchAtStartup: Bool = (SMAppService.mainApp.status == .enabled)
     @State private var statusMessage: String = ""
     @State private var showDiff: Bool = false
@@ -237,6 +239,16 @@ struct SettingsView: View {
         }
     }
 
+    private func hostEnabled(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { !OrcaHostSettings.parse(orcaDisabledHostIds).contains(id) },
+            set: { on in
+                var ids = OrcaHostSettings.parse(orcaDisabledHostIds)
+                if on { ids.remove(id) } else { ids.insert(id) }
+                orcaDisabledHostIds = OrcaHostSettings.encode(ids)
+            })
+    }
+
     // MARK: - General section
 
     @ViewBuilder private var generalSection: some View {
@@ -268,6 +280,31 @@ struct SettingsView: View {
                 }
                 .disabled(!state.soundEnabled)
                 Text("Orca Notch plays macOS system sounds. Drop a file named finish.wav, approval.mp3, question.aiff, error.wav or approve.wav in the sounds folder to replace one, then Reload.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(6)
+        }
+
+        GroupBox("Orca remote hosts") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Include remote Orca servers", isOn: $orcaIncludeRemoteHosts)
+                    .help("Counts and lists the agents of the Orca servers you paired, next to this Mac's. Read-only.")
+                ForEach(state.orca.hosts) { status in
+                    Toggle(isOn: hostEnabled(status.host.id)) {
+                        HStack(spacing: 6) {
+                            Text(status.host.name)
+                            if status.isOffline {
+                                Text("offline").font(.system(size: 10)).foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .disabled(!orcaIncludeRemoteHosts)
+                }
+                Text(state.orca.hosts.isEmpty
+                     ? "No paired Orca servers found. Pair one in Orca and it shows up here."
+                     : "Hosts you turn off are not polled at all.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
