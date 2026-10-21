@@ -66,11 +66,17 @@ public final class OrcaStore {
         isPolling = false
     }
 
+    /// Row click: reveal the workspace in the Orca app (see `OrcaReveal`); runs off the main actor.
+    public func reveal(workspaceKey: String) {
+        let c = collector
+        Task.detached(priority: .userInitiated) { _ = await c.reveal(workspaceKey: workspaceKey) }
+    }
+
     /// One immediate full collection cycle (all sources).
     public func refresh() async {
         lastFullAt = Date()
         let next = await collector.collect(includeRemote: includeRemote)
-        if next != snapshot { snapshot = next }
+        publish(next)
     }
 
     /// One policy tick: a fast cycle (`worktree ps` only), or a full one when it is due.
@@ -79,12 +85,16 @@ public final class OrcaStore {
             await refresh()
         } else {
             let next = await collector.collectFast(includeRemote: includeRemote)
-            if next != snapshot { snapshot = next }
+            publish(next)
         }
+    }
+
+    private func publish(_ next: OrcaSnapshot) {
+        if !next.hasSameContent(as: snapshot) { snapshot = next }
     }
 
     private func rederive() async {
         let next = await collector.snapshot(includeRemote: includeRemote)
-        if next != snapshot { snapshot = next }
+        publish(next)
     }
 }

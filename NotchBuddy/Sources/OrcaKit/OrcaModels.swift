@@ -171,6 +171,19 @@ public struct OrcaSnapshot: Equatable, Sendable {
     public var workspaces: [OrcaWorkspace]
     public var sources: [OrcaSource: OrcaSourceHealth]
 
+    /// Same data, ignoring bookkeeping that changes on every poll (`generatedAt`, per-source
+    /// `lastSuccessAt`). The store publishes only when this is false, so an unchanged Orca does not
+    /// re-render the island.
+    public func hasSameContent(as other: OrcaSnapshot) -> Bool {
+        func normalized(_ s: OrcaSnapshot) -> OrcaSnapshot {
+            var n = s
+            n.generatedAt = 0
+            n.sources = n.sources.mapValues { var h = $0; h.lastSuccessAt = nil; return h }
+            return n
+        }
+        return normalized(self) == normalized(other)
+    }
+
     public static let empty = OrcaSnapshot(
         generatedAt: 0, stale: true, orca: OrcaRuntimeInfo(ok: false, version: nil),
         counts: OrcaCounts(), workers: OrcaWorkerCounts(), usage: [], workspaces: [],

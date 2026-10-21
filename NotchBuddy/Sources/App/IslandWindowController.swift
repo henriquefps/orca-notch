@@ -131,7 +131,7 @@ final class IslandWindowController: NSWindowController {
         container.addSubview(dropView)   // z-top: drag only (hitTest→nil, transparent to mouse)
         panel.contentView = container
 
-        startPolling()
+        refreshPolling()
         observeScreenForPolling()
         startKeyMonitor()
         startLocalKeyMonitor()
@@ -254,54 +254,58 @@ final class IslandWindowController: NSWindowController {
         fsm.keepsCompact = { AppState.shared.orcaKeepsIslandVisible }
     }
 
-    // MARK: - Polling loop
-    // 60 Hz while the island is on screen, a drag is under way or the
-    // pointer is near the island; 8 Hz (with timer tolerance) while it is hidden and the pointer
-    // is elsewhere, so a hidden island costs next to nothing (CLAUDE.md: 0 % CPU when hidden).
+    // MARK: - Pointer tracking
+    // Event-driven: the mouse-moved / dragged monitors call `pollFrame` (throttled to 60 Hz), so a still
+    // pointer costs nothing. A 10 Hz safety timer only runs while the island is on screen, to catch
+    // a state change under a still pointer (the island opening, a timer ending); a drag gets 60 Hz for
+    // the ghost. A hidden island has no timer at all (CLAUDE.md: 0 % CPU when hidden).
 
-    private static let fastPoll: TimeInterval = 1.0 / 60.0
-    private static let nearPoll: TimeInterval = 1.0 / 20.0
-    private static let idlePoll: TimeInterval = 1.0 / 8.0
+    private static let dragPoll: TimeInterval = 1.0 / 60.0
+    private static let visiblePoll: TimeInterval = 1.0 / 10.0
+    private static let minEventGap: CFTimeInterval = 1.0 / 60.0
     private var pollInterval: TimeInterval = 0
+    private var lastPollAt: CFTimeInterval = 0
+    private var modeCancellable: AnyCancellable?
 
     /// Screen asleep or locked: nothing to hover, the poll stops entirely.
     private var screenOff = false
 
-    private func startPolling(interval: TimeInterval = IslandWindowController.fastPoll) {
+    /// Timer for `interval` seconds; 0 stops it.
+    private func startPolling(interval: TimeInterval) {
         frameTimer?.invalidate()
         frameTimer = nil
         pollInterval = interval
-        guard !screenOff else { return }
+        guard !screenOff, interval > 0 else { return }
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             // Scheduled on the main run loop: already on the main actor, no Task per tick.
             MainActor.assumeIsolated { self?.pollFrame() }
         }
-        // A few ms of slack lets macOS group our wakeups with others; hover is unaffected.
-        timer.tolerance = interval == Self.idlePoll ? 0.04 : interval == Self.nearPoll ? 0.01 : 0.004
+        timer.tolerance = interval == Self.dragPoll ? 0.004 : 0.03
         RunLoop.main.add(timer, forMode: .common)
         frameTimer = timer
     }
 
-    /// Picks the polling rate for the next ticks (see startPolling).
-    /// Three rates for a hidden or resting island: 60 Hz close to the island itself, 20 Hz in the
-    /// wide band around the panel (a pointer flicked up still reaches the close zone
-    /// within one tick), 8 Hz elsewhere. Before, the whole band ran at 60 Hz, so a hidden
-    /// island polled at 60 Hz most of the time.
-    private func adjustPollRate(mouse: NSPoint, panelFrame: NSRect, islandRect: NSRect) {
-        let island = islandRect.offsetBy(dx: panelFrame.minX, dy: panelFrame.minY)
-        let nearIsland = island.insetBy(dx: -200, dy: -160).contains(mouse)
-        let inBand = panelFrame.insetBy(dx: -120, dy: -120).contains(mouse)
-        // The resting (compact) island is treated like the hidden one: the mascot reads the
-        // pointer itself every frame, so only hover and clicks need this poll, and those
-        // only near the island. 60 Hz while open, dragging or close to it.
-        let busy = state.mode == .expanded || inAttachDrag || attachDragStart != nil
-            || fsm.state == .home || nearIsland
-        let wanted = busy ? Self.fastPoll : inBand ? Self.nearPoll : Self.idlePoll
+    /// Timer cadence the current state needs (see the section comment).
+    private var wantedPoll: TimeInterval {
+        if inAttachDrag || attachDragStart != nil { return Self.dragPoll }
+        return state.mode == .hidden ? 0 : Self.visiblePoll
+    }
+
+    private func refreshPolling() {
+        let wanted = wantedPoll
         if wanted != pollInterval { startPolling(interval: wanted) }
+    }
+
+    /// From the mouse monitors: one poll per event, at most every `minEventGap`.
+    private func pointerMoved() {
+        let now = CACurrentMediaTime()
+        guard now - lastPollAt >= Self.minEventGap else { return }
+        pollFrame()
     }
 
     private func pollFrame() {
         guard let panel = window as? IslandPanel else { return }
+        lastPollAt = CACurrentMediaTime()
 
         let mouse = NSEvent.mouseLocation
         followMouseIfNeeded(mouse)
@@ -371,7 +375,7 @@ final class IslandWindowController: NSWindowController {
             updateWindowHighlight()
         }
 
-        adjustPollRate(mouse: mouse, panelFrame: pf, islandRect: islandRect)
+        refreshPolling()
     }
 
     /// Screen asleep or locked: stop polling; back at the idle rate when it wakes.
@@ -401,7 +405,7 @@ final class IslandWindowController: NSWindowController {
     private func resumePollingAfterScreenOff() {
         guard screenOff else { return }
         screenOff = false
-        startPolling(interval: Self.idlePoll)
+        refreshPolling()
     }
 
     private var lastMouse: CGPoint = .zero
@@ -705,12 +709,22 @@ final class IslandWindowController: NSWindowController {
         // Eye tracking at the mouse's own rate: The mascot's look target follows every mouse move
         // instead of the island poll (8 to 20 Hz away from the island, which made the head step).
         // Nothing runs while the mouse is still, and a hidden island skips the work.
-        NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in
-            MainActor.assumeIsolated { IslandWindowController.trackMouseLook() }
+        NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
+            MainActor.assumeIsolated {
+                IslandWindowController.trackMouseLook()
+                self?.pointerMoved()
+            }
         }
-        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in
-            MainActor.assumeIsolated { IslandWindowController.trackMouseLook() }
+        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
+            MainActor.assumeIsolated {
+                IslandWindowController.trackMouseLook()
+                self?.pointerMoved()
+            }
             return event
+        }
+        // Timer on while the island is on screen, off while hidden.
+        modeCancellable = AppState.shared.$mode.removeDuplicates().sink { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshPolling() }
         }
 
         // Window attach drag.
@@ -1088,7 +1102,10 @@ final class IslandWindowController: NSWindowController {
         guard app.mode != .hidden else { return }
         let pos = DesktopSpace.topDown(NSEvent.mouseLocation, desktopTop: desktopTop)
         let cur = app.mousePosition
-        if abs(pos.x - cur.x) > 1 || abs(pos.y - cur.y) > 1 { app.mousePosition = pos }
+        if abs(pos.x - cur.x) > 1 || abs(pos.y - cur.y) > 1 {
+            MascotPacing.touch()
+            app.mousePosition = pos
+        }
     }
 
     /// Screen the island currently sits on.
@@ -1212,7 +1229,7 @@ func islandSize(mode: IslandMode, view: IslandView,
                 nh: CGFloat = IslandConst.notchHeight) -> (CGFloat, CGFloat) {
     switch mode {
     case .hidden:   return (nw, nh)
-    case .compact:  return (nw + 160, nh)
+    case .compact:  return (nw + 2 * IslandRestingLayout.earWidth, nh)
     case .expanded:
         let layout = IslandConst.viewLayouts[view]!
         if view == .question, let h = QuestionLayout.height {

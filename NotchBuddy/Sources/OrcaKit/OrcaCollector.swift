@@ -8,9 +8,9 @@ public actor OrcaCollector {
     public static let commandTimeout: TimeInterval = 10
     static let maxWorkerPages = 50
 
-    private let runner: any OrcaCommandRunning
-    private let timeout: TimeInterval
-    private var raw = OrcaRawState()
+    let runner: any OrcaCommandRunning
+    let timeout: TimeInterval
+    var raw = OrcaRawState()
     private var health: [OrcaSource: OrcaSourceHealth] = Dictionary(
         uniqueKeysWithValues: OrcaSource.allCases.map { ($0, OrcaSourceHealth(ok: false)) })
     private var lastCompleteAt: Int?

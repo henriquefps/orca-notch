@@ -35,6 +35,12 @@ struct IslandRestingLayout {
     let width: CGFloat
     let height: CGFloat
 
+    /// Each side of the notch in the resting island: the mascot on the left, the Orca counters on the right.
+    static let earWidth: CGFloat = 148
+    /// Counter icon size: 2x the first version, capped so it fits a short (notchless) bar.
+    var counterIconSize: CGFloat { min(20, max(10, height - 6)) }
+    var counterCenterX: CGFloat { width - Self.earWidth / 2 }
+
     var botDiameter: CGFloat { min(20, max(0, height - 6)) }
     var botCenterY: CGFloat { height / 2 }
     var miniGridScale: CGFloat { min(1, max(0, height - 4) / 28) }

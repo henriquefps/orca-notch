@@ -72,9 +72,9 @@ struct IslandContainer: View {
 
             Group {
                 if state.mode == .compact {
-                    OrcaCounterStrip(counts: state.orca.agentCounts)
-                        .scaleEffect(IslandRestingLayout(width: islandWidth, height: islandHeight).miniGridScale)
-                        .position(x: islandWidth - 40, y: islandHeight / 2)
+                    let resting = IslandRestingLayout(width: islandWidth, height: islandHeight)
+                    OrcaCounterStrip(counts: state.orca.agentCounts, iconSize: resting.counterIconSize)
+                        .position(x: resting.counterCenterX, y: islandHeight / 2)
                         .transition(.opacity)
                 }
             }
@@ -380,6 +380,10 @@ struct CountdownBar: View {
 
 struct IslandContentView: View {
     @ObservedObject var state: AppState
+    /// Views that have been shown at least once. The others stay unmounted: a mounted view costs a share
+    /// of every SwiftUI update (all thirteen mounted made each mascot frame cost tens of ms), but one that
+    /// was shown stays mounted so its state and the cross-fade survive.
+    @State private var mounted: Set<IslandView> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -397,6 +401,7 @@ struct IslandContentView: View {
                     let anim: Animation = active
                         ? .spring(response: 0.4, dampingFraction: 0.8).delay(0.16)
                         : .easeIn(duration: 0.16)
+                    if active || mounted.contains(v) {
                     IslandViewContent(view: v, state: state)
                         // Views behind the active one stay mounted (for the cross-fade)
                         // but stop their endless animations: nobody sees them.
@@ -408,10 +413,13 @@ struct IslandContentView: View {
                         .scaleEffect(active ? 1 : 0.97)
                         .allowsHitTesting(active)
                         .animation(anim, value: state.view)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 10)
+            .onAppear { mounted.insert(state.view) }
+            .onChange(of: state.view) { _, v in mounted.insert(v) }
         }
         .padding(.top, 8)
         .padding(.bottom, 10)

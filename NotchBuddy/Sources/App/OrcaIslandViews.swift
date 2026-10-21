@@ -1,7 +1,9 @@
 import SwiftUI
+import AppKit
 
 // Orca data in the island: the counters of the closed island and the open workspace list.
-// Placeholder styling, consistent with the existing cards; read-only (no row action).
+// Placeholder styling, consistent with the existing cards. Read-only except the row click, which only
+// brings the workspace's terminal forward in Orca (OrcaReveal).
 
 private enum OrcaColors {
     static let running = Color(hex: "#3B9EFF")
@@ -16,28 +18,86 @@ private enum OrcaColors {
 
 // MARK: - Icons (the Orca sidebar's: spinner, check-circle, bell)
 
-/// Rotating arc; the animation only exists while the view is on screen and active.
+/// Rotating arc. The rotation is a Core Animation animation, which the render server runs on its own:
+/// a SwiftUI `repeatForever` or a TimelineView re-renders the whole island on every frame (measured:
+/// the main cost of an open island). Only animates while the view is on screen and active.
 struct OrcaSpinner: View {
     var size: CGFloat = 10
     var color: Color = OrcaColors.running
     @Environment(\.islandViewActive) private var active
-    @State private var turn = false
 
     var body: some View {
-        Circle()
-            .trim(from: 0.12, to: 0.82)
-            .stroke(color, style: StrokeStyle(lineWidth: max(1.2, size / 8), lineCap: .round))
+        SpinnerLayerView(color: NSColor(color), lineWidth: max(1.2, size / 8), spinning: active)
             .frame(width: size, height: size)
-            .rotationEffect(.degrees(turn ? 360 : 0))
-            .onAppear { restart() }
-            .onChange(of: active) { _, _ in restart() }
-            .onDisappear { turn = false }
+    }
+}
+
+private struct SpinnerLayerView: NSViewRepresentable {
+    let color: NSColor
+    let lineWidth: CGFloat
+    let spinning: Bool
+
+    func makeNSView(context: Context) -> SpinnerNSView { SpinnerNSView() }
+
+    func updateNSView(_ view: SpinnerNSView, context: Context) {
+        view.configure(color: color, lineWidth: lineWidth, spinning: spinning)
     }
 
-    private func restart() {
-        turn = false
-        guard active else { return }
-        withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { turn = true }
+    final class SpinnerNSView: NSView {
+        private let arc = CAShapeLayer()
+        private var spinning = false
+        private static let key = "spin"
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.addSublayer(arc)
+            arc.fillColor = nil
+            arc.lineCap = .round
+            arc.strokeStart = 0.12
+            arc.strokeEnd = 0.82
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        func configure(color: NSColor, lineWidth: CGFloat, spinning: Bool) {
+            arc.strokeColor = color.cgColor
+            arc.lineWidth = lineWidth
+            self.spinning = spinning
+            syncAnimation()
+        }
+
+        override func layout() {
+            super.layout()
+            // A zero-anchored layer would rotate around its corner: centre it on the view.
+            let inset = arc.lineWidth / 2
+            let rect = bounds.insetBy(dx: inset, dy: inset)
+            arc.bounds = bounds
+            arc.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            arc.path = CGPath(ellipseIn: rect, transform: nil)
+            syncAnimation()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            syncAnimation()   // Core Animation drops animations when a layer leaves its window
+        }
+
+        private func syncAnimation() {
+            let running = arc.animation(forKey: Self.key) != nil
+            guard spinning && window != nil else {
+                if running { arc.removeAnimation(forKey: Self.key) }
+                return
+            }
+            guard !running else { return }
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = 0
+            spin.toValue = -2 * Double.pi          // clockwise
+            spin.duration = 0.9
+            spin.repeatCount = .infinity
+            spin.isRemovedOnCompletion = false
+            arc.add(spin, forKey: Self.key)
+        }
     }
 }
 
@@ -78,9 +138,10 @@ struct OrcaWorkspaceStateIcon: View {
 
 struct OrcaCounterStrip: View {
     let counts: OrcaAgentCounts
+    var iconSize: CGFloat = 20
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) {
             if counts.running > 0 { counter(.running, counts.running) }
             if counts.finished > 0 { counter(.finished, counts.finished) }
             if counts.alert > 0 { counter(.alert, counts.alert) }
@@ -90,11 +151,12 @@ struct OrcaCounterStrip: View {
     }
 
     private func counter(_ status: OrcaAgentStatus, _ n: Int) -> some View {
-        HStack(spacing: 2) {
-            OrcaStatusIcon(status: status, size: 10)
-            Text("\(n)")
-                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+        HStack(spacing: 3) {
+            OrcaStatusIcon(status: status, size: iconSize)
+            Text(n > 99 ? "99+" : "\(n)")
+                .font(.system(size: iconSize * 0.8, weight: .semibold).monospacedDigit())
                 .foregroundColor(OrcaColors.text)
+
         }
     }
 }
@@ -179,13 +241,17 @@ struct OrcaWorkspaceRow: View {
                 }
             }
             .fixedSize()
-            Text(ago)
-                .font(.system(size: 10).monospacedDigit())
-                .foregroundColor(OrcaColors.secondary)
-                .frame(width: 42, alignment: .trailing)
+            // The snapshot no longer republishes while nothing changes: the age ticks on its own.
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                Text(ago)
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundColor(OrcaColors.secondary)
+                    .frame(width: 42, alignment: .trailing)
+            }
         }
         .padding(.vertical, 4)
-        .contentShape(Rectangle())   // read-only: hovering and clicking do nothing
+        .contentShape(Rectangle())
+        .onTapGesture { OrcaIslandBridge.shared.store.reveal(workspaceKey: workspace.key) }
     }
 
     private var subtitle: String {

@@ -11,6 +11,7 @@
 		04AF12596F6D1DB0CAA06FB7 /* OrcaPollPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20440AD9CABB4A5D870420D2 /* OrcaPollPolicy.swift */; };
 		065FCE817315454DE3F85F25 /* IslandViewContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA02B08886939FF6FE0475DD /* IslandViewContent.swift */; };
 		091EC3B2F1060D7EE1317E4E /* IslandWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D710BD7834228045869D0184 /* IslandWindowController.swift */; };
+		0B46923CB372F6B368D93AD0 /* OrcaReveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 440BEFFC19432B78D24C2FC3 /* OrcaReveal.swift */; };
 		0DC22EB1C90FE74B4F20AAD4 /* OrcaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA12DA358E9EDC182D60CCE /* OrcaStore.swift */; };
 		1D4CE0CCD2B5A0FFE50C7F06 /* TerminalTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AF6F7A027AB1D46309DD49 /* TerminalTarget.swift */; };
 		1DAB0704A136FF8E6FB34191 /* ClaudeResponseText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444604C7E2C530B664849EF9 /* ClaudeResponseText.swift */; };
@@ -18,6 +19,7 @@
 		1EAFEE80A8066B77F9410025 /* ShortcutsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CF42AE7611EF212CA0458F /* ShortcutsSettingsView.swift */; };
 		1F11EC4E6F604C612A1ADAD1 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E4F18AA940EFF7E047B9F7 /* AppState.swift */; };
 		23AA986A80B636DE47848A3E /* OrcaIslandViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A13E5F336308AE40F1E507 /* OrcaIslandViews.swift */; };
+		23B8F1C342EF45BC825DC8A6 /* OrcaReveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 440BEFFC19432B78D24C2FC3 /* OrcaReveal.swift */; };
 		244A22B23E62CF6307D74467 /* OrcaCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F17DB22EA412AB563F2807 /* OrcaCollector.swift */; };
 		276B38D5C2D2A13B51DBDD2F /* OrcaFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = F77B3B20AE14DA090B519578 /* OrcaFormatting.swift */; };
 		277B2DB3C9B2FF027AC976BD /* OrcaFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = F77B3B20AE14DA090B519578 /* OrcaFormatting.swift */; };
@@ -38,6 +40,7 @@
 		56BE8C733F10A030A638FB60 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1A7D5CBE2AC084A10C5FF3 /* SettingsView.swift */; };
 		57251211943B23F85582E786 /* ClaudeDesktopChatWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95FF987AE2A4E9EFB6A15519 /* ClaudeDesktopChatWatcher.swift */; };
 		582C7E0E4C2CF4231BC9F5BF /* OrcaCollectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CAA7182A94F698D7457E7EC /* OrcaCollectorTests.swift */; };
+		58ACE81F647DE9F53221E9A7 /* OrcaRevealTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07DF3B0367E4C5D39B617B27 /* OrcaRevealTests.swift */; };
 		5B9A00AFB0837731FA678E4E /* IslandStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8212018F09EA1E96FBD63CD /* IslandStateMachine.swift */; };
 		5BEF7579345FA0B6C8C1778A /* PillColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F940CD6207AA2E7C5E7CCD2 /* PillColors.swift */; };
 		5EA11D9BEF5E481333DF5888 /* OrcaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67BFEC6F6C24DC1B94E5028 /* OrcaModels.swift */; };
@@ -111,6 +114,7 @@
 
 /* Begin PBXFileReference section */
 		0174E40ABE50086AD7F51375 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
+		07DF3B0367E4C5D39B617B27 /* OrcaRevealTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrcaRevealTests.swift; sourceTree = "<group>"; };
 		1218B86E249691AF44F819AC /* HotKeyCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyCenter.swift; sourceTree = "<group>"; };
 		15A1A8206F73376F4CAF2057 /* IslandRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandRootView.swift; sourceTree = "<group>"; };
 		168A9A73B519018FAB0AA465 /* GitHubActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubActivity.swift; sourceTree = "<group>"; };
@@ -127,6 +131,7 @@
 		39F5FA7228396F2BA91CF9E8 /* Mascot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mascot.swift; sourceTree = "<group>"; };
 		3B238F6E7B20EFDED5CD3E8E /* ClaudeSettingsFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSettingsFile.swift; sourceTree = "<group>"; };
 		3D0943B42F8073DC7B5C92FF /* IslandTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandTypes.swift; sourceTree = "<group>"; };
+		440BEFFC19432B78D24C2FC3 /* OrcaReveal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrcaReveal.swift; sourceTree = "<group>"; };
 		444604C7E2C530B664849EF9 /* ClaudeResponseText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeResponseText.swift; sourceTree = "<group>"; };
 		4A09E73F1E58019EF6EA2A62 /* IslandDisplayChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandDisplayChoice.swift; sourceTree = "<group>"; };
 		506824380E9C80B9BC6DCE72 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -267,6 +272,7 @@
 				E67BFEC6F6C24DC1B94E5028 /* OrcaModels.swift */,
 				20440AD9CABB4A5D870420D2 /* OrcaPollPolicy.swift */,
 				670CC8DF12BEE490AC172406 /* OrcaRaw.swift */,
+				440BEFFC19432B78D24C2FC3 /* OrcaReveal.swift */,
 				EAA12DA358E9EDC182D60CCE /* OrcaStore.swift */,
 			);
 			path = OrcaKit;
@@ -328,6 +334,7 @@
 				D6F5B3906EE18D9A7FBC58FB /* OrcaDerivationTests.swift */,
 				60C58035215B20C4C4F0A581 /* OrcaFormattingTests.swift */,
 				9490E1934599B7EEC9803DB2 /* OrcaKitTestSupport.swift */,
+				07DF3B0367E4C5D39B617B27 /* OrcaRevealTests.swift */,
 			);
 			path = OrcaKitTests;
 			sourceTree = "<group>";
@@ -515,6 +522,7 @@
 				C06D46BDD226087A9B272054 /* OrcaNotchApp.swift in Sources */,
 				7D8B69FDC3E73115A383EE84 /* OrcaPollPolicy.swift in Sources */,
 				D4686FBFB44C89A6888789DC /* OrcaRaw.swift in Sources */,
+				0B46923CB372F6B368D93AD0 /* OrcaReveal.swift in Sources */,
 				0DC22EB1C90FE74B4F20AAD4 /* OrcaStore.swift in Sources */,
 				A243372F214156E66DA03E9D /* PillCatalog.swift in Sources */,
 				5BEF7579345FA0B6C8C1778A /* PillColors.swift in Sources */,
@@ -543,6 +551,7 @@
 				41526693F562CACD5D8F7502 /* OrcaModels.swift in Sources */,
 				04AF12596F6D1DB0CAA06FB7 /* OrcaPollPolicy.swift in Sources */,
 				DA5321D03FB502D062055BF7 /* OrcaRaw.swift in Sources */,
+				23B8F1C342EF45BC825DC8A6 /* OrcaReveal.swift in Sources */,
 				BB6E26DD2814B4003C9EB749 /* OrcaStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -557,6 +566,7 @@
 				431AADD984AC2B5B0D96C202 /* OrcaDerivationTests.swift in Sources */,
 				96A2A7766332C37F82C115A6 /* OrcaFormattingTests.swift in Sources */,
 				8AA90D68360F93FCC7DC15CF /* OrcaKitTestSupport.swift in Sources */,
+				58ACE81F647DE9F53221E9A7 /* OrcaRevealTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

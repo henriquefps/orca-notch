@@ -22,7 +22,7 @@ a documented contract, so the notch does not talk to it. State is read with the 
 - Sleep: `willSleep` / `screensDidSleep` slow the poll to 15 s, `didWake` / `screensDidWake` restore it.
 - All CLI work and JSON decoding run in `OrcaCollector` (an actor, processes via `ProcessCommandRunner`);
   the main actor only receives the finished snapshot. A failing source keeps its last good value.
-- The island is Mac UI only: hidden costs one 15 s `worktree ps`/full cycle, nothing else (no timers,
+- The island is Mac UI only: hidden costs one 15 s `worktree ps`/full cycle, nothing else (no animation timers,
   no animations).
 
 ## Closed-island counters (agents, not workspaces)
@@ -45,6 +45,37 @@ finished agents alone do not hold it open, so it folds away as usual once everyt
 A flat list (no grouping by project) of workspaces that have an agent or a non-idle state, ordered by
 the derivation: failed, needs you, running, in review, done; then most recent activity. Rows show state
 icon, name, repo, branch, PR, the icons of the agents inside and time since the last activity. The list
-scrolls; the footer shows usage per provider (session and week, with reset time). Rows are read-only:
-Orca's CLI has no safe read-only way to focus a workspace (`worktree show` does not open it, and
-`worktree create --activate` / `file open` mutate UI state), so clicking does nothing.
+scrolls; the footer shows usage per provider (session and week, with reset time).
+
+## Row click: the one non-read command
+
+Orca's CLI has no command that only focuses a workspace (`worktree show` does not open it, and
+`worktree create --activate` / `file open` mutate UI state). It has `terminal switch --terminal <handle>`
+("Switch to a terminal tab in the UI"), a view change: no agent, repo or workspace state is touched. A
+row click therefore runs, off the main actor (`OrcaStore.reveal` -> `OrcaCollector.reveal`, `OrcaReveal`):
+
+1. `terminal list --worktree id:<worktreeId> --json` (read) to find the workspace's live terminals; the
+   id stays inside the collector (the public model holds no paths), the row passes its hashed `key`.
+2. `terminal switch --terminal <handle>`, preferring a connected terminal that runs an agent.
+
+Remote workspaces, unknown keys and workspaces without a live terminal do nothing. `terminal switch` is
+the single non-read command the notch runs (pinned by `OrcaRevealTests`).
+
+## Cost
+
+Measured with `ps -o cputime` deltas over 2 s windows, settled app (60 s after launch), Debug build,
+windows where the keyboard and pointer were idle:
+
+| State | Before | After |
+|---|---|---|
+| Island open, idle | ~18 % | ~1.7 % |
+| Island closed (counters), idle | ~18 % | ~1.0 % |
+| Island hidden, idle | n/a | ~0.8 % (includes the 15 s polls) |
+
+What changed: the mascot redraws on a rationed schedule (20 fps right after the pointer moved, 10 / 6 fps
+open, 4 / 2 fps closed, `MascotPacing`) instead of at the display rate; the pointer is read from the
+mouse-moved monitors (throttled to 60 Hz) plus a 10 Hz safety timer only while the island is on screen
+(60 Hz only during a drag, no timer when hidden), instead of a 60 Hz timer; the spinners are Core Animation
+animations run by the render server; views of the island that were never shown are not mounted; and the
+store publishes a snapshot only when its content changed (`OrcaSnapshot.hasSameContent`, which ignores
+`generatedAt` and the per-source `lastSuccessAt`).
