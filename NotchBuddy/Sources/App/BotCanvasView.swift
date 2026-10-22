@@ -128,7 +128,7 @@ struct BotCanvasView: View {
         func botPoint(islandH: CGFloat) -> CGPoint {
             let (botCx, botCy, _, _) = botPosition(mode: state.mode, view: state.view,
                                                     islandW: islandW, islandH: islandH)
-            return DesktopSpace.topDown(CGPoint(x: screen.midX - islandW / 2 + botCx,
+            return DesktopSpace.topDown(CGPoint(x: (IslandWindowController.currentCenterX ?? screen.midX) - islandW / 2 + botCx,
                                                 y: screen.maxY - botCy),
                                         desktopTop: desktopTop)
         }
