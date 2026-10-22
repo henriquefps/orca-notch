@@ -352,6 +352,14 @@ struct SettingsView: View {
                     }
                 }
                 .frame(maxWidth: 360)
+                HStack {
+                    Button("Reset position") {
+                        NotificationCenter.default.post(name: .islandResetPosition, object: nil)
+                    }
+                    Text("Drag the closed island sideways to move it. Double-click it to bring it back.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
                 Text("On a screen without a notch, the island sits in a small bar at the top. Follow the mouse moves it to your cursor's screen while it is closed.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)

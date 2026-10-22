@@ -38,16 +38,31 @@ enum IslandScreenGeometryTests {
             )
             precondition(geometry.width == 184 && geometry.height == 32)
         }
-        // Compact/greeting destinations share the measured resting height.
-        for height: CGFloat in [22, 24, 32, 38] {
-            let compact = IslandRestingLayout(width: 240, height: height)
+        // Closed island: half the first version's width (notch + 2 * 148), same height.
+        precondition(IslandRestingLayout.closedWidth(notchWidth: 184) == 240)   // notched: was 480
+        precondition(IslandRestingLayout.closedHeight(notchHeight: 32) == 32)   // unchanged
+        precondition(IslandRestingLayout.closedWidth(notchWidth: 80) == 188)    // notchless: was 376
+        precondition(IslandRestingLayout.closedHeight(notchHeight: 24) == 24)   // unchanged
+        precondition(IslandRestingLayout.cornerRadius(height: 24, preferred: 14) == 12)
+        precondition(IslandRestingLayout.cornerRadius(height: 40, preferred: 14) == 14)
+
+        // Counters are one centered group, glyphs keep their size and stay inside the bar.
+        for (width, height): (CGFloat, CGFloat) in [(188, 24), (240, 32), (188, 22), (240, 38)] {
+            let compact = IslandRestingLayout(width: width, height: height)
+            precondition(compact.counterCenterX == width / 2)
+            precondition(compact.counterIconSize == min(20, max(10, height - 6)))
+            precondition(compact.counterGroupMaxWidth < width)
             precondition(compact.botCenterY == height / 2)
             precondition(compact.botDiameter == min(20, height - 6))
             precondition(compact.botCenterY - compact.botDiameter / 2 >= 3)
             precondition(compact.botCenterY + compact.botDiameter / 2 <= height - 3)
-            precondition(compact.miniGridCenterX == 200)
-            precondition(compact.miniGridScale * 28 <= height - 4)
         }
-        print("Island screen geometry and resting layout: 13 cases passed")
+        // The mascot is shown only if it fits left of the counter group: on a notch yes, on the narrow notchless bar no.
+        let notched = IslandRestingLayout(width: 240, height: 32)
+        precondition(notched.showsMascot)
+        precondition(notched.botCenterX + notched.botDiameter / 2 < 120 - notched.counterGroupMaxWidth / 2)
+        precondition(!IslandRestingLayout(width: 188, height: 24).showsMascot)
+        precondition(!IslandRestingLayout(width: 110, height: 32).showsMascot)
+        print("Island screen geometry and resting layout: all cases passed")
     }
 }

@@ -47,6 +47,16 @@ final class IslandWindowController: NSWindowController {
     private var notchH: CGFloat = IslandConst.notchHeight
     private var hasNotch = true
 
+    // Island position along the top edge (drag to move, remembered per display)
+    private let positionStore = IslandPositionStore()
+    private var moveDrag: IslandDragTracker? = nil      // a press on the closed island, click or drag not decided yet
+    private var moveDragStartCenter: CGFloat = 0
+    private var isMovingIsland = false
+    private var lastExpandAt: CFTimeInterval = 0
+    private var placementSubscription: AnyCancellable?
+    /// Horizontal center of the island on its screen, in AppKit screen coordinates.
+    private(set) static var currentCenterX: CGFloat?
+
     // Island-local key monitor (active only when island is key window)
     private var localKeyMonitor: Any?
 
@@ -149,6 +159,21 @@ final class IslandWindowController: NSWindowController {
                 }
             }
 
+        // Open island: anchored to the dragged position, shifted just enough to stay on screen.
+        // @Published sinks run before the value is stored, so use the received values.
+        placementSubscription = Publishers.CombineLatest(state.$mode, state.$view)
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] mode, view in
+                MainActor.assumeIsolated {
+                    self?.applyPlacement(mode: mode, view: view, animated: true)
+                }
+            }
+        NotificationCenter.default.addObserver(forName: .islandResetPosition, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resetPosition() }
+        }
+        applyPlacement(mode: state.mode, view: state.view, animated: false)
+
         // Screen choice changed in Settings: move right away (explicit user action).
         displaySubscription = state.$islandDisplay
             .dropFirst()
@@ -189,11 +214,86 @@ final class IslandWindowController: NSWindowController {
 
         let sf = screen.frame
         let size = panel.frame.size
-        panel.setFrame(NSRect(x: sf.midX - size.width/2, y: sf.maxY - size.height,
+        let centerX = placementCenterX(on: screen, mode: state.mode, view: state.view)
+        Self.currentCenterX = centerX
+        panel.setFrame(NSRect(x: centerX - size.width/2, y: sf.maxY - size.height,
                               width: size.width, height: size.height), display: true)
         // notchWidth/hasNotch are not @Published: tell the views to resize the island.
         NotificationCenter.default.post(name: .islandScreenChanged, object: nil)
         state.objectWillChange.send()
+    }
+
+    // MARK: - Island position (drag along the top edge)
+
+    /// Island width for placement: the open width while expanded, else the closed one (also while hidden,
+    /// so revealing the island never shifts it).
+    private func placementWidth(mode: IslandMode, view: IslandView) -> CGFloat {
+        islandSize(mode: mode == .expanded ? .expanded : .compact, view: view, nw: notchW, nh: notchH).0
+    }
+
+    private func placementCenterX(on screen: NSScreen, mode: IslandMode, view: IslandView) -> CGFloat {
+        let sf = screen.frame
+        return IslandPlacement.centerX(storedOffset: positionStore.offset(for: Self.displayUUID(screen)),
+                                       islandWidth: placementWidth(mode: mode, view: view),
+                                       screenMinX: sf.minX, screenMaxX: sf.maxX)
+    }
+
+    /// Puts the panel at the island's place on its screen. The open island is anchored to the dragged position
+    /// and clamped on screen for its own width, the closed one returns to the dragged position itself.
+    private func applyPlacement(mode: IslandMode, view: IslandView, animated: Bool) {
+        guard let panel = window as? IslandPanel, !isMovingIsland else { return }
+        let centerX = placementCenterX(on: Self.islandScreen(), mode: mode, view: view)
+        Self.currentCenterX = centerX
+        setPanelCenterX(centerX, animated: animated)
+    }
+
+    private func setPanelCenterX(_ centerX: CGFloat, animated: Bool) {
+        guard let panel = window as? IslandPanel else { return }
+        var frame = panel.frame
+        frame.origin.x = centerX - frame.width / 2
+        guard abs(frame.origin.x - panel.frame.origin.x) > 0.5 else { return }
+        panel.setFrame(frame, display: true, animate: animated)
+    }
+
+    /// Pointer is on the closed island's footprint (window coordinates), for the double-click reset.
+    private func isOnClosedFootprint(_ windowPoint: CGPoint) -> Bool {
+        guard let panel = window else { return false }
+        let (w, h) = islandSize(mode: .compact, view: state.view, nw: notchW, nh: notchH)
+        return windowPoint.y >= panel.frame.height - h && abs(windowPoint.x - panel.frame.width / 2) <= w / 2
+    }
+
+    private func beginIslandMove() {
+        isMovingIsland = true
+        pendingIslandClick = false
+        hoverTimer?.cancel()
+    }
+
+    private func dragIsland(by dx: CGFloat) {
+        let screen = Self.islandScreen()
+        let sf = screen.frame
+        let width = placementWidth(mode: .compact, view: state.view)
+        let centerX = IslandPlacement.clampedCenterX(moveDragStartCenter + dx, islandWidth: width,
+                                                     screenMinX: sf.minX, screenMaxX: sf.maxX)
+        Self.currentCenterX = centerX
+        setPanelCenterX(centerX, animated: false)
+    }
+
+    private func endIslandMove() {
+        defer { moveDrag = nil }
+        guard isMovingIsland else { return }
+        isMovingIsland = false
+        guard let centerX = Self.currentCenterX else { return }
+        let sf = Self.islandScreen().frame
+        positionStore.setOffset(IslandPlacement.offset(forCenterX: centerX, screenMinX: sf.minX, screenMaxX: sf.maxX),
+                                for: Self.displayUUID(Self.islandScreen()))
+    }
+
+    /// Back to the default centered place (the notch on a notched Mac) on the island's current display.
+    func resetPosition() {
+        moveDrag = nil
+        isMovingIsland = false
+        positionStore.reset(for: Self.displayUUID(Self.islandScreen()))
+        applyPlacement(mode: state.mode, view: state.view, animated: true)
     }
 
     /// Follow-the-mouse mode: hop to the cursor's screen while the island is not open,
@@ -323,7 +423,7 @@ final class IslandWindowController: NSWindowController {
         let inIsland = hoverRect.contains(local)
 
         // Toggle click-through
-        let shouldAcceptMouse = inIsland || inAttachDrag || attachDragStart != nil
+        let shouldAcceptMouse = inIsland || inAttachDrag || attachDragStart != nil || moveDrag != nil
         if panel.ignoresMouseEvents == shouldAcceptMouse {
             panel.ignoresMouseEvents = !shouldAcceptMouse
             if shouldAcceptMouse, let cv = panel.contentView {
@@ -347,7 +447,7 @@ final class IslandWindowController: NSWindowController {
         let previouslyInIsland = wasInIsland
         wasInIsland = inIsland
         if inIsland && !previouslyInIsland {
-            guard !inAttachDrag else { return }
+            guard !inAttachDrag, !isMovingIsland else { return }
             fsm.mouseEntered()
         }
         if !inIsland && previouslyInIsland {
@@ -474,6 +574,7 @@ final class IslandWindowController: NSWindowController {
         if state.mode == .expanded {
             // Already expanded — just switch view
         } else {
+            lastExpandAt = CACurrentMediaTime()
             setMode(.expanded)
         }
         state.lastActivity = .now
@@ -739,6 +840,21 @@ final class IslandWindowController: NSWindowController {
                 self.hoverTimer?.cancel()
                 self.botHoverTimer?.cancel()
                 self.botHovering = false
+                // Double-click on the island: back to the default place. The first click may already
+                // have opened it, so a just-opened island counts too.
+                if event.clickCount == 2, self.isOnClosedFootprint(event.locationInWindow),
+                   self.state.mode == .compact || CACurrentMediaTime() - self.lastExpandAt < 0.8 {
+                    self.pendingIslandClick = false
+                    self.resetPosition()
+                    if self.state.mode == .expanded { self.collapse() }
+                    return
+                }
+                // A press on the closed island may turn into a move along the top edge.
+                if self.state.mode == .compact {
+                    self.moveDrag = IslandDragTracker(origin: NSEvent.mouseLocation)
+                    self.moveDragStartCenter = Self.currentCenterX ?? self.window?.frame.midX ?? 0
+                    return
+                }
                 // Drag only starts when clicking directly on the mascot
                 guard self.isBotHit(event.locationInWindow) else { return }
                 self.attachDragStart = NSEvent.mouseLocation
@@ -751,6 +867,14 @@ final class IslandWindowController: NSWindowController {
         NSEvent.addLocalMonitorForEvents(matching: .leftMouseDragged) { [weak self] event in
             guard let self else { return event }
             MainActor.assumeIsolated {
+                if var tracker = self.moveDrag {
+                    if let dx = tracker.update(to: NSEvent.mouseLocation) {
+                        if !self.isMovingIsland { self.beginIslandMove() }
+                        self.dragIsland(by: dx)
+                    }
+                    self.moveDrag = tracker
+                    return
+                }
                 guard let start = self.attachDragStart, !self.inAttachDrag else { return }
                 let m = NSEvent.mouseLocation
                 guard hypot(m.x - start.x, m.y - start.y) > 3 else { return }
@@ -791,6 +915,7 @@ final class IslandWindowController: NSWindowController {
                 let hadPendingClick = self.pendingIslandClick
                 let wasDragging     = self.inAttachDrag
                 self.pendingIslandClick = false
+                self.endIslandMove()
                 if wasDragging {
                     finishDrag()
                 } else {
@@ -1220,6 +1345,8 @@ extension Notification.Name {
     static let hookReveal       = Notification.Name("orcaNotch.hookReveal")
     // Island moved to another screen (resting size may differ: notch vs bar)
     static let islandScreenChanged = Notification.Name("orcaNotch.islandScreenChanged")
+    // Settings → Reset position
+    static let islandResetPosition = Notification.Name("orcaNotch.islandResetPosition")
 }
 
 // MARK: - islandSize (takes real notch dimensions)
@@ -1229,7 +1356,8 @@ func islandSize(mode: IslandMode, view: IslandView,
                 nh: CGFloat = IslandConst.notchHeight) -> (CGFloat, CGFloat) {
     switch mode {
     case .hidden:   return (nw, nh)
-    case .compact:  return (nw + 2 * IslandRestingLayout.earWidth, nh)
+    case .compact:  return (IslandRestingLayout.closedWidth(notchWidth: nw),
+                            IslandRestingLayout.closedHeight(notchHeight: nh))
     case .expanded:
         let layout = IslandConst.viewLayouts[view]!
         if view == .question, let h = QuestionLayout.height {

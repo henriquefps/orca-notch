@@ -80,6 +80,7 @@
 		CA3321C14A11FED94E48B3E3 /* IslandRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15A1A8206F73376F4CAF2057 /* IslandRootView.swift */; };
 		CCA9A4B67070DFF455DD297E /* Mascot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F5FA7228396F2BA91CF9E8 /* Mascot.swift */; };
 		CD8DECA66B9E09C97E469DB9 /* BotCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29F4C0B02BE91654D02AA0C /* BotCanvasView.swift */; };
+		D0D012FDB37569073FDB5546 /* IslandPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2CD17D95F3FB20C3B384FB9 /* IslandPlacement.swift */; };
 		D4686FBFB44C89A6888789DC /* OrcaRaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670CC8DF12BEE490AC172406 /* OrcaRaw.swift */; };
 		D861479F6E7EAD07A6AC2105 /* ClaudePlanGauge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF22817EC70748F2D1FB2E7 /* ClaudePlanGauge.swift */; };
 		D9FF132804EB458F6FA69116 /* GitHubActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 168A9A73B519018FAB0AA465 /* GitHubActivity.swift */; };
@@ -164,6 +165,7 @@
 		B2AA83D80260660475FAB052 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		B2FDED98F7F6C755A72C97A3 /* SafeWebURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeWebURL.swift; sourceTree = "<group>"; };
 		BFE88A53AEAA637F866D479D /* ChatMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMarkdownView.swift; sourceTree = "<group>"; };
+		C2CD17D95F3FB20C3B384FB9 /* IslandPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandPlacement.swift; sourceTree = "<group>"; };
 		C2E4F18AA940EFF7E047B9F7 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		C50EEFB5C59ED46766F1BB7F /* ColorHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHex.swift; sourceTree = "<group>"; };
 		CCF9E9CF07962FC2702FB794 /* OrcaCommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrcaCommandRunner.swift; sourceTree = "<group>"; };
@@ -207,6 +209,7 @@
 			children = (
 				C50EEFB5C59ED46766F1BB7F /* ColorHex.swift */,
 				96F2AF8512331502EEE67179 /* DiffEngine.swift */,
+				C2CD17D95F3FB20C3B384FB9 /* IslandPlacement.swift */,
 				FC351C4ABDD53B6384467CD3 /* IslandScreenGeometry.swift */,
 				3D0943B42F8073DC7B5C92FF /* IslandTypes.swift */,
 				39F5FA7228396F2BA91CF9E8 /* Mascot.swift */,
@@ -511,6 +514,7 @@
 				2C798C3837A63B9BB561A1A0 /* HookServer.swift in Sources */,
 				B733A76DD197F6D6D949284C /* HotKeyCenter.swift in Sources */,
 				9E34044A001B01C3A514D20A /* IslandDisplayChoice.swift in Sources */,
+				D0D012FDB37569073FDB5546 /* IslandPlacement.swift in Sources */,
 				CA3321C14A11FED94E48B3E3 /* IslandRootView.swift in Sources */,
 				38C83F7A05E16A6A211CB890 /* IslandScreenGeometry.swift in Sources */,
 				5B9A00AFB0837731FA678E4E /* IslandStateMachine.swift in Sources */,

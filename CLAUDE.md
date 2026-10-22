@@ -11,6 +11,11 @@ Orca Notch is a native, Mac-only notch app (`NotchBuddy/`). A small placeholder 
 - `scripts/make-icons.swift` — generates the placeholder app and menu bar icons.
 - `LICENSE-ASSETS.md` — the upstream name, character, icon and sounds are not free to reuse and are not in this repo.
 
+## Island position and size
+- Closed island: half the old width (`(notch + 2 * 148) / 2`: 188 pt on a notchless screen, 240 pt on a notch), same height; the three counters are one centered group, the mascot sits left of them and is hidden when it does not fit (`IslandRestingLayout.showsMascot`).
+- Drag the closed island sideways to move it along the top edge (vertical locked, `IslandPlacement.screenMargin` 8 pt from the screen edges, 4 pt click-or-drag threshold, driven by the existing mouse-dragged monitor, no timers). Double-click or Settings > Display > Reset position returns to the centered default (the notch on notched Macs).
+- UserDefaults key `islandPositions`: dictionary display UUID -> horizontal offset in points from the screen's middle (absent = default). Logic in `NotchKit/IslandPlacement.swift`, tests `scripts/test-island-placement.sh`. The open island anchors to the stored position, clamped for its own width.
+
 ## Build
 ```
 cd NotchBuddy && xcodegen && xcodebuild -scheme NotchBuddy -configuration Debug build

@@ -73,7 +73,8 @@ struct IslandContainer: View {
             Group {
                 if state.mode == .compact {
                     let resting = IslandRestingLayout(width: islandWidth, height: islandHeight)
-                    OrcaCounterStrip(counts: state.orca.agentCounts, iconSize: resting.counterIconSize)
+                    OrcaCounterStrip(counts: state.orca.agentCounts, iconSize: resting.counterIconSize,
+                                     spacing: resting.counterSpacing, innerSpacing: resting.counterInnerSpacing)
                         .position(x: resting.counterCenterX, y: islandHeight / 2)
                         .transition(.opacity)
                 }
@@ -86,7 +87,9 @@ struct IslandContainer: View {
             let anim = shrinking ? closeEase : openSpring
             let (w, h) = islandSize(mode: newMode, view: state.view,
                                     nw: state.notchWidth, nh: state.notchHeight)
-            let cr  = newMode == .expanded ? IslandConst.expandedCorner : IslandConst.roundedCorner
+            let cr  = newMode == .expanded ? IslandConst.expandedCorner
+                : newMode == .compact ? IslandRestingLayout.cornerRadius(height: h, preferred: IslandConst.roundedCorner)
+                : IslandConst.roundedCorner
             let tr: CGFloat = 0
             withAnimation(anim) {
                 islandWidth      = w
@@ -113,7 +116,9 @@ struct IslandContainer: View {
                                     nw: state.notchWidth, nh: state.notchHeight)
             islandWidth      = w
             islandHeight     = state.view == .prompt ? chatPromptHeight : h
-            cornerRadius     = state.mode == .expanded ? IslandConst.expandedCorner : IslandConst.roundedCorner
+            cornerRadius     = state.mode == .expanded ? IslandConst.expandedCorner
+                : state.mode == .compact ? IslandRestingLayout.cornerRadius(height: h, preferred: IslandConst.roundedCorner)
+                : IslandConst.roundedCorner
             islandTopRadius  = 0
         }
         .onReceive(NotificationCenter.default.publisher(for: .islandScreenChanged)) { _ in
@@ -122,6 +127,9 @@ struct IslandContainer: View {
                                     nw: state.notchWidth, nh: state.notchHeight)
             islandWidth  = w
             islandHeight = (state.mode == .expanded && state.view == .prompt) ? chatPromptHeight : h
+            if state.mode == .compact {
+                cornerRadius = IslandRestingLayout.cornerRadius(height: h, preferred: IslandConst.roundedCorner)
+            }
         }
     }
 
@@ -283,7 +291,10 @@ func botPosition(mode: IslandMode, view: IslandView, islandW: CGFloat, islandH: 
     case .hidden:
         return hasNotch ? (46, 16, 6, 0)
             : (islandW / 2, resting.botCenterY, resting.botDiameter, 1)
-    case .compact: return (40, resting.botCenterY, resting.botDiameter, 1)
+    case .compact:
+        // The mascot yields to the centered counters when it does not fit beside them.
+        return resting.showsMascot ? (resting.botCenterX, resting.botCenterY, resting.botDiameter, 1)
+            : (resting.botCenterX, resting.botCenterY, 0, 0)
     case .expanded:
         let layout = IslandConst.viewLayouts[view]!
         let diameter = layout.botDiameter

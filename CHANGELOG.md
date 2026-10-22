@@ -12,6 +12,7 @@ Orca Notch starts from [Louis-CFM/coucou](https://github.com/Louis-CFM/coucou) a
 
 ### Changed
 
+- Closed island: half as wide (188 pt on a notchless screen, 240 pt with a notch; the height is unchanged), the three counters centered as one group, the mascot left of them (hidden if it does not fit). You can drag the closed island sideways along the top edge; the position is remembered per display (`islandPositions`), the open island opens anchored to it, and double-click or Settings > Display > Reset position brings it back to the default place.
 - Closed island: the three counters are about twice as big (icon up to 20 pt, semibold digits) and each ear of the resting island is 148 pt wide, so nothing clips on screens with and without a notch.
 - Clicking a workspace row in the open island brings that workspace's terminal forward in Orca (`orca terminal switch`, the only non-read command the notch runs).
 - CPU with the island on screen drops from about 18 % to about 1 to 2 %: the mascot redraws at 2 to 20 fps instead of the display rate, the pointer is read from mouse events instead of a 60 Hz timer, the spinners run in Core Animation, unvisited island views are not mounted, and an unchanged Orca snapshot is not republished.

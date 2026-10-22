@@ -139,9 +139,11 @@ struct OrcaWorkspaceStateIcon: View {
 struct OrcaCounterStrip: View {
     let counts: OrcaAgentCounts
     var iconSize: CGFloat = 20
+    var spacing: CGFloat = 10
+    var innerSpacing: CGFloat = 3
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: spacing) {
             if counts.running > 0 { counter(.running, counts.running) }
             if counts.finished > 0 { counter(.finished, counts.finished) }
             if counts.alert > 0 { counter(.alert, counts.alert) }
@@ -151,7 +153,7 @@ struct OrcaCounterStrip: View {
     }
 
     private func counter(_ status: OrcaAgentStatus, _ n: Int) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: innerSpacing) {
             OrcaStatusIcon(status: status, size: iconSize)
             Text(n > 99 ? "99+" : "\(n)")
                 .font(.system(size: iconSize * 0.8, weight: .semibold).monospacedDigit())
